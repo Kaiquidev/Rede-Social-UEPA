@@ -11,6 +11,8 @@ class UserModel {
   final bool ativo;
   final String email;
   final String senha;
+  final List<String> seguidores;
+  final List<String> seguindo;
 
   const UserModel({
     required this.uid,
@@ -25,6 +27,8 @@ class UserModel {
     required this.ativo,
     required this.email,
     required this.senha,
+    this.seguidores = const [],
+    this.seguindo = const [],
   });
 
   bool get isAdmin => tipoPerfil == 'admin';
@@ -42,6 +46,8 @@ class UserModel {
     bool? ativo,
     String? email,
     String? senha,
+    List<String>? seguidores,
+    List<String>? seguindo,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -56,40 +62,8 @@ class UserModel {
       ativo: ativo ?? this.ativo,
       email: email ?? this.email,
       senha: senha ?? this.senha,
-    );
-  }
-
-  Map<String, dynamic> toMap() {
-    return {
-      'uid': uid,
-      'nomeCompleto': nomeCompleto,
-      'dataNascimento': dataNascimento,
-      'curso': curso,
-      'cpf': cpf,
-      'instagram': instagram,
-      'fotoUrl': fotoUrl,
-      'tipoPerfil': tipoPerfil,
-      'biografia': biografia,
-      'ativo': ativo,
-      'email': email,
-      'senha': senha,
-    };
-  }
-
-  factory UserModel.fromMap(Map<String, dynamic> map) {
-    return UserModel(
-      uid: map['uid'] ?? '',
-      nomeCompleto: map['nomeCompleto'] ?? '',
-      dataNascimento: map['dataNascimento'] ?? '',
-      curso: map['curso'] ?? '',
-      cpf: map['cpf'] ?? '',
-      instagram: map['instagram'] ?? '',
-      fotoUrl: map['fotoUrl'] ?? '',
-      tipoPerfil: map['tipoPerfil'] ?? 'aluno',
-      biografia: map['biografia'] ?? '',
-      ativo: map['ativo'] ?? true,
-      email: map['email'] ?? '',
-      senha: map['senha'] ?? '',
+      seguidores: seguidores ?? this.seguidores,
+      seguindo: seguindo ?? this.seguindo,
     );
   }
 }

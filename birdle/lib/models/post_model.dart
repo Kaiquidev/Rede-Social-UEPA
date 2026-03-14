@@ -1,9 +1,12 @@
+import 'comment_model.dart';
+
 enum PostMediaType { none, image, video }
 
 class PostModel {
   final String id;
   final String authorId;
   final String authorName;
+  final String authorPhoto;
   final String cursoAutor;
   final String conteudo;
   final DateTime createdAt;
@@ -11,11 +14,13 @@ class PostModel {
   final PostMediaType mediaType;
   final String mediaPath;
   final List<String> likedByUserIds;
+  final List<CommentModel> comments;
 
   const PostModel({
     required this.id,
     required this.authorId,
     required this.authorName,
+    required this.authorPhoto,
     required this.cursoAutor,
     required this.conteudo,
     required this.createdAt,
@@ -23,6 +28,7 @@ class PostModel {
     this.mediaType = PostMediaType.none,
     this.mediaPath = '',
     this.likedByUserIds = const [],
+    this.comments = const [],
   });
 
   bool isLikedBy(String userId) => likedByUserIds.contains(userId);
@@ -31,6 +37,7 @@ class PostModel {
     String? id,
     String? authorId,
     String? authorName,
+    String? authorPhoto,
     String? cursoAutor,
     String? conteudo,
     DateTime? createdAt,
@@ -38,11 +45,13 @@ class PostModel {
     PostMediaType? mediaType,
     String? mediaPath,
     List<String>? likedByUserIds,
+    List<CommentModel>? comments,
   }) {
     return PostModel(
       id: id ?? this.id,
       authorId: authorId ?? this.authorId,
       authorName: authorName ?? this.authorName,
+      authorPhoto: authorPhoto ?? this.authorPhoto,
       cursoAutor: cursoAutor ?? this.cursoAutor,
       conteudo: conteudo ?? this.conteudo,
       createdAt: createdAt ?? this.createdAt,
@@ -50,6 +59,7 @@ class PostModel {
       mediaType: mediaType ?? this.mediaType,
       mediaPath: mediaPath ?? this.mediaPath,
       likedByUserIds: likedByUserIds ?? this.likedByUserIds,
+      comments: comments ?? this.comments,
     );
   }
 }
