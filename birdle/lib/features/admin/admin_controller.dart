@@ -7,6 +7,7 @@ class AdminController {
 
   List<UserModel> get usuarios => _store.users;
   List<PostModel> get posts => _store.posts;
+  List<String> get cursos => _store.courses;
 
   void alternarStatusUsuario(String userId) {
     _store.toggleUserStatus(userId);
@@ -14,5 +15,17 @@ class AdminController {
 
   void removerPost(String postId) {
     _store.removePost(postId);
+  }
+
+  void adicionarCurso(String nome) {
+    _store.addCourse(nome);
+  }
+
+  void editarCurso(String antigo, String novo) {
+    _store.updateCourse(antigo, novo);
+  }
+
+  void excluirCurso(String nome) {
+    _store.removeCourse(nome);
   }
 }
