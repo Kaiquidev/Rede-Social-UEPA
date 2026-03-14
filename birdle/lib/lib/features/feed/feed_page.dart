@@ -57,7 +57,7 @@ class _FeedPageState extends State<FeedPage> {
         _selectedMediaType = PostMediaType.image;
         _selectedMediaPath = file.path;
       });
-    } catch (e) {
+    } catch (_) {
       _mostrarMensagem('Erro ao selecionar imagem.');
     }
   }
@@ -75,7 +75,7 @@ class _FeedPageState extends State<FeedPage> {
         _selectedMediaType = PostMediaType.video;
         _selectedMediaPath = file.path;
       });
-    } catch (e) {
+    } catch (_) {
       _mostrarMensagem('Erro ao selecionar vídeo.');
     }
   }
@@ -116,9 +116,8 @@ class _FeedPageState extends State<FeedPage> {
 
       _postController.clear();
       _limparMidiaSelecionada();
-
       _mostrarMensagem('Postagem publicada com sucesso!');
-    } catch (e) {
+    } catch (_) {
       _mostrarMensagem('Erro ao publicar postagem.');
     } finally {
       if (mounted) {
