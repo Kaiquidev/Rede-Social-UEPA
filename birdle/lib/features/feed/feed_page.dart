@@ -26,6 +26,9 @@ class _FeedPageState extends State<FeedPage> {
   String _selectedMediaPath = '';
   bool _isPosting = false;
 
+  // Filtro: false = Todos, true = Seguindo
+  bool _apenasSegunido = false;
+
   @override
   void initState() {
     super.initState();
@@ -43,6 +46,8 @@ class _FeedPageState extends State<FeedPage> {
     if (mounted) setState(() {});
   }
 
+  // ── Mídia ──────────────────────────────────────────────────────────────────
+
   Future<void> _selecionarImagem() async {
     try {
       final file = await _picker.pickImage(
@@ -50,7 +55,6 @@ class _FeedPageState extends State<FeedPage> {
         imageQuality: 85,
       );
       if (file == null) return;
-
       setState(() {
         _selectedMediaType = PostMediaType.image;
         _selectedMediaPath = file.path;
@@ -67,7 +71,6 @@ class _FeedPageState extends State<FeedPage> {
         maxDuration: const Duration(seconds: 30),
       );
       if (file == null) return;
-
       setState(() {
         _selectedMediaType = PostMediaType.video;
         _selectedMediaPath = file.path;
@@ -83,6 +86,8 @@ class _FeedPageState extends State<FeedPage> {
       _selectedMediaPath = '';
     });
   }
+
+  // ── Publicar ───────────────────────────────────────────────────────────────
 
   Future<void> _publicarPost() async {
     final texto = _postController.text.trim();
@@ -100,9 +105,7 @@ class _FeedPageState extends State<FeedPage> {
       }
     }
 
-    setState(() {
-      _isPosting = true;
-    });
+    setState(() => _isPosting = true);
 
     try {
       _controller.publicar(
@@ -110,18 +113,13 @@ class _FeedPageState extends State<FeedPage> {
         mediaType: _selectedMediaType,
         mediaPath: _selectedMediaPath,
       );
-
       _postController.clear();
       _limparMidiaSelecionada();
       _mostrarMensagem('Postagem publicada com sucesso!');
     } catch (_) {
       _mostrarMensagem('Erro ao publicar postagem.');
     } finally {
-      if (mounted) {
-        setState(() {
-          _isPosting = false;
-        });
-      }
+      if (mounted) setState(() => _isPosting = false);
     }
   }
 
@@ -130,6 +128,92 @@ class _FeedPageState extends State<FeedPage> {
       SnackBar(content: Text(texto)),
     );
   }
+
+  // ── Editar post ────────────────────────────────────────────────────────────
+
+  void _abrirEdicao(PostModel post) {
+    final editController = TextEditingController(text: post.conteudo);
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Editar publicação'),
+        content: TextField(
+          controller: editController,
+          maxLines: 5,
+          decoration: const InputDecoration(
+            hintText: 'Edite sua publicação...',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final novoTexto = editController.text.trim();
+              if (novoTexto.isEmpty) {
+                _mostrarMensagem('O conteúdo não pode estar vazio.');
+                return;
+              }
+              final ok = _controller.editar(
+                postId: post.id,
+                novoConteudo: novoTexto,
+              );
+              Navigator.pop(context);
+              if (ok) {
+                _mostrarMensagem('Publicação editada!');
+              }
+            },
+            child: const Text('Salvar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Confirmar deleção ──────────────────────────────────────────────────────
+
+  void _confirmarDelecao(String postId) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Excluir publicação'),
+        content: const Text(
+            'Tem certeza que deseja excluir esta publicação? Essa ação não pode ser desfeita.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              _controller.remover(postId);
+              Navigator.pop(context);
+              _mostrarMensagem('Publicação excluída.');
+            },
+            child: const Text('Excluir',
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Navegação para perfil público ──────────────────────────────────────────
+
+  void _abrirPerfilPublico(String userId) {
+    if (userId == _store.currentUser?.uid) {
+      Navigator.pushNamed(context, AppRoutes.profile);
+      return;
+    }
+    Navigator.pushNamed(context, AppRoutes.publicProfile, arguments: userId);
+  }
+
+  // ── Comentários ────────────────────────────────────────────────────────────
 
   void _abrirComentarios(PostModel post) {
     final commentController = TextEditingController();
@@ -141,8 +225,7 @@ class _FeedPageState extends State<FeedPage> {
       builder: (context) {
         return Padding(
           padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-          ),
+              bottom: MediaQuery.of(context).viewInsets.bottom),
           child: SizedBox(
             height: 500,
             child: Column(
@@ -157,75 +240,68 @@ class _FeedPageState extends State<FeedPage> {
                   ),
                 ),
                 const SizedBox(height: 14),
-                const Text(
-                  'Comentários',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                ),
+                const Text('Comentários',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 18)),
                 const SizedBox(height: 10),
                 Expanded(
                   child: post.comments.isEmpty
                       ? const Center(
-                          child: Text('Nenhum comentário ainda.'),
-                        )
+                          child: Text('Nenhum comentário ainda.'))
                       : ListView.builder(
-                          padding: const EdgeInsets.all(16),
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 16),
                           itemCount: post.comments.length,
                           itemBuilder: (context, index) {
                             final comment = post.comments[index];
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xfff1f5f9),
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      comment.authorName,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      comment.content,
-                                      style: const TextStyle(height: 1.4),
-                                    ),
-                                  ],
+                            return ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: CircleAvatar(
+                                radius: 18,
+                                backgroundColor: const Color(0xffdbeafe),
+                                child: Text(
+                                  comment.authorName.isNotEmpty
+                                      ? comment.authorName[0].toUpperCase()
+                                      : '?',
+                                  style: const TextStyle(
+                                      color: Color(0xff1877f2),
+                                      fontSize: 13),
                                 ),
                               ),
+                              title: Text(comment.authorName,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13)),
+                              subtitle: Text(comment.content),
                             );
                           },
                         ),
                 ),
+                const Divider(height: 1),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 10),
                   child: Row(
                     children: [
                       Expanded(
                         child: TextField(
                           controller: commentController,
                           decoration: const InputDecoration(
-                            hintText: 'Escreva um comentário',
+                            hintText: 'Escreva um comentário...',
+                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 10),
                           ),
                         ),
                       ),
                       const SizedBox(width: 8),
-                      ElevatedButton(
+                      TextButton(
                         onPressed: () {
                           final text = commentController.text.trim();
                           if (text.isEmpty) return;
-
                           _store.addComment(
-                            postId: post.id,
-                            content: text,
-                          );
-
+                              postId: post.id, content: text);
                           Navigator.pop(context);
-                          _mostrarMensagem('Comentário adicionado.');
                         },
                         child: const Text('Enviar'),
                       ),
@@ -240,47 +316,46 @@ class _FeedPageState extends State<FeedPage> {
     );
   }
 
+  // ── Formatação de tempo ────────────────────────────────────────────────────
+
   String _formatarTempo(DateTime data) {
-    final diferenca = DateTime.now().difference(data);
-
-    if (diferenca.inSeconds < 60) return 'agora';
-    if (diferenca.inMinutes < 60) return '${diferenca.inMinutes} min';
-    if (diferenca.inHours < 24) return '${diferenca.inHours} h';
-    if (diferenca.inDays < 7) return '${diferenca.inDays} d';
-
-    final dia = data.day.toString().padLeft(2, '0');
-    final mes = data.month.toString().padLeft(2, '0');
-    final ano = data.year.toString();
-
-    return '$dia/$mes/$ano';
+    final d = DateTime.now().difference(data);
+    if (d.inSeconds < 60) return 'agora';
+    if (d.inMinutes < 60) return '${d.inMinutes} min';
+    if (d.inHours < 24) return '${d.inHours} h';
+    if (d.inDays < 7) return '${d.inDays} d';
+    return '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}/${data.year}';
   }
+
+  // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     final currentUser = _store.currentUser;
 
     if (currentUser == null) {
-      Future.microtask(() {
-        Navigator.pushNamedAndRemoveUntil(
-            context, AppRoutes.login, (_) => false);
-      });
-
+      Future.microtask(() => Navigator.pushNamedAndRemoveUntil(
+          context, AppRoutes.login, (_) => false));
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+          body: Center(child: CircularProgressIndicator()));
     }
 
-    final posts = _controller.posts;
+    final posts =
+        _apenasSegunido ? _controller.postsSeguindo : _controller.posts;
     final notifications = _store.currentUserNotifications;
-    final unreadCount = notifications.where((item) => !item.read).length;
+    final unreadCount = notifications.where((n) => !n.read).length;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'UEPA Social',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        title: const Text('UEPA Social',
+            style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
+          IconButton(
+            tooltip: 'Buscar usuários',
+            onPressed: () =>
+                Navigator.pushNamed(context, AppRoutes.search),
+            icon: const Icon(Icons.search),
+          ),
           Stack(
             children: [
               IconButton(
@@ -327,29 +402,30 @@ class _FeedPageState extends State<FeedPage> {
                   right: 8,
                   top: 7,
                   child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
                       color: Colors.red,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Text(
-                      '$unreadCount',
-                      style: const TextStyle(color: Colors.white, fontSize: 11),
-                    ),
+                    child: Text('$unreadCount',
+                        style: const TextStyle(
+                            color: Colors.white, fontSize: 11)),
                   ),
                 ),
             ],
           ),
           IconButton(
             tooltip: 'Perfil',
-            onPressed: () => Navigator.pushNamed(context, AppRoutes.profile),
+            onPressed: () =>
+                Navigator.pushNamed(context, AppRoutes.profile),
             icon: const Icon(Icons.person_outline),
           ),
           if (currentUser.isAdmin)
             IconButton(
               tooltip: 'Administrador',
-              onPressed: () => Navigator.pushNamed(context, AppRoutes.admin),
+              onPressed: () =>
+                  Navigator.pushNamed(context, AppRoutes.admin),
               icon: const Icon(Icons.admin_panel_settings_outlined),
             ),
           IconButton(
@@ -369,7 +445,11 @@ class _FeedPageState extends State<FeedPage> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0xfff3f6fb), Color(0xffdce5f1), Color(0xffcfd9e8)],
+            colors: [
+              Color(0xfff3f6fb),
+              Color(0xffdce5f1),
+              Color(0xffcfd9e8),
+            ],
           ),
         ),
         child: Center(
@@ -380,6 +460,8 @@ class _FeedPageState extends State<FeedPage> {
               children: [
                 _buildTopoUsuario(currentUser),
                 const SizedBox(height: 16),
+                _buildFiltro(),
+                const SizedBox(height: 12),
                 _buildCaixaCriarPost(currentUser),
                 const SizedBox(height: 18),
                 if (posts.isEmpty)
@@ -398,6 +480,8 @@ class _FeedPageState extends State<FeedPage> {
       ),
     );
   }
+
+  // ── Topo do usuário ────────────────────────────────────────────────────────
 
   Widget _buildTopoUsuario(UserModel user) {
     return Container(
@@ -422,13 +506,18 @@ class _FeedPageState extends State<FeedPage> {
                   radius: 28,
                   backgroundImage: NetworkImage(user.fotoUrl),
                 )
-              : const CircleAvatar(
+              : CircleAvatar(
                   radius: 28,
                   backgroundColor: Colors.white,
-                  child: Icon(
-                    Icons.person,
-                    size: 30,
-                    color: Color(0xff1877f2),
+                  child: Text(
+                    user.nomeCompleto.isNotEmpty
+                        ? user.nomeCompleto[0].toUpperCase()
+                        : '?',
+                    style: const TextStyle(
+                      color: Color(0xff1877f2),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 22,
+                    ),
                   ),
                 ),
           const SizedBox(width: 14),
@@ -436,24 +525,19 @@ class _FeedPageState extends State<FeedPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Bem-vindo(a)',
-                  style: TextStyle(color: Colors.white70, fontSize: 13),
-                ),
+                const Text('Bem-vindo(a)',
+                    style:
+                        TextStyle(color: Colors.white70, fontSize: 13)),
                 const SizedBox(height: 2),
-                Text(
-                  user.nomeCompleto,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                Text(user.nomeCompleto,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold)),
                 const SizedBox(height: 2),
-                Text(
-                  user.curso,
-                  style: const TextStyle(color: Colors.white70, fontSize: 13.5),
-                ),
+                Text(user.curso,
+                    style: const TextStyle(
+                        color: Colors.white70, fontSize: 13.5)),
               ],
             ),
           ),
@@ -462,7 +546,55 @@ class _FeedPageState extends State<FeedPage> {
     );
   }
 
-  Widget _buildCaixaCriarPost(UserModel currentUser) {
+  // ── Filtro Todos / Seguindo ────────────────────────────────────────────────
+
+  Widget _buildFiltro() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            const Text(
+              'Mostrar:',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Color(0xff475569),
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: SegmentedButton<bool>(
+                segments: const [
+                  ButtonSegment(
+                    value: false,
+                    label: Text('Todos'),
+                    icon: Icon(Icons.public_outlined),
+                  ),
+                  ButtonSegment(
+                    value: true,
+                    label: Text('Seguindo'),
+                    icon: Icon(Icons.people_outline),
+                  ),
+                ],
+                selected: {_apenasSegunido},
+                onSelectionChanged: (value) {
+                  setState(() => _apenasSegunido = value.first);
+                },
+                style: ButtonStyle(
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Caixa criar post ───────────────────────────────────────────────────────
+
+  Widget _buildCaixaCriarPost(UserModel user) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
@@ -471,31 +603,30 @@ class _FeedPageState extends State<FeedPage> {
           children: [
             Row(
               children: [
-                currentUser.fotoUrl.isNotEmpty
+                user.fotoUrl.isNotEmpty
                     ? CircleAvatar(
-                        radius: 22,
-                        backgroundImage: NetworkImage(currentUser.fotoUrl),
+                        radius: 20,
+                        backgroundImage: NetworkImage(user.fotoUrl),
                       )
                     : CircleAvatar(
-                        radius: 22,
+                        radius: 20,
                         backgroundColor: const Color(0xffdbeafe),
                         child: Text(
-                          currentUser.nomeCompleto[0].toUpperCase(),
+                          user.nomeCompleto.isNotEmpty
+                              ? user.nomeCompleto[0].toUpperCase()
+                              : '?',
                           style: const TextStyle(
-                            color: Color(0xff0f4db8),
-                            fontWeight: FontWeight.bold,
-                          ),
+                              color: Color(0xff1877f2),
+                              fontWeight: FontWeight.bold),
                         ),
                       ),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Text(
-                    'Criar publicação',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xff1e293b),
-                    ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Criar publicação',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xff1e293b),
                   ),
                 ),
               ],
@@ -528,11 +659,8 @@ class _FeedPageState extends State<FeedPage> {
                       child: IconButton(
                         padding: EdgeInsets.zero,
                         onPressed: _limparMidiaSelecionada,
-                        icon: const Icon(
-                          Icons.close,
-                          size: 18,
-                          color: Colors.white,
-                        ),
+                        icon: const Icon(Icons.close,
+                            size: 18, color: Colors.white),
                       ),
                     ),
                   ),
@@ -573,31 +701,40 @@ class _FeedPageState extends State<FeedPage> {
     );
   }
 
+  // ── Feed vazio ─────────────────────────────────────────────────────────────
+
   Widget _buildEmptyFeed() {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(26),
         child: Column(
-          children: const [
+          children: [
             Icon(
-              Icons.dynamic_feed_outlined,
+              _apenasSegunido
+                  ? Icons.people_outline
+                  : Icons.dynamic_feed_outlined,
               size: 52,
-              color: Color(0xff64748b),
+              color: const Color(0xff64748b),
             ),
-            SizedBox(height: 12),
+            const SizedBox(height: 12),
             Text(
-              'Nenhuma postagem ainda',
-              style: TextStyle(
+              _apenasSegunido
+                  ? 'Nenhuma postagem de quem você segue'
+                  : 'Nenhuma postagem ainda',
+              style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: Color(0xff334155),
               ),
             ),
-            SizedBox(height: 6),
+            const SizedBox(height: 6),
             Text(
-              'Faça a primeira publicação e movimente a rede social da UEPA.',
+              _apenasSegunido
+                  ? 'Siga mais pessoas para ver as publicações delas aqui.'
+                  : 'Faça a primeira publicação e movimente a rede social da UEPA.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Color(0xff64748b), height: 1.4),
+              style: const TextStyle(
+                  color: Color(0xff64748b), height: 1.4),
             ),
           ],
         ),
@@ -605,11 +742,14 @@ class _FeedPageState extends State<FeedPage> {
     );
   }
 
+  // ── Card de post ───────────────────────────────────────────────────────────
+
   Widget _buildPostCard(PostModel post, String currentUserId) {
     final liked = post.isLikedBy(currentUserId);
     final isOwnPost = post.authorId == currentUserId;
     final author = _store.getUserById(post.authorId);
-    final isFollowing = author == null ? false : _store.isFollowing(author.uid);
+    final isFollowing =
+        author == null ? false : _store.isFollowing(author.uid);
 
     return Card(
       child: Padding(
@@ -672,12 +812,16 @@ class _FeedPageState extends State<FeedPage> {
                     onPressed: () => _controller.curtir(post.id),
                     icon: Icon(
                       liked ? Icons.favorite : Icons.favorite_border,
-                      color: liked ? Colors.red : const Color(0xff1877f2),
+                      color: liked
+                          ? Colors.red
+                          : const Color(0xff1877f2),
                     ),
                     label: Text(
                       liked ? 'Curtido' : 'Curtir',
                       style: TextStyle(
-                        color: liked ? Colors.red : const Color(0xff1877f2),
+                        color: liked
+                            ? Colors.red
+                            : const Color(0xff1877f2),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -686,17 +830,12 @@ class _FeedPageState extends State<FeedPage> {
                 Expanded(
                   child: TextButton.icon(
                     onPressed: () => _abrirComentarios(post),
-                    icon: const Icon(
-                      Icons.mode_comment_outlined,
-                      color: Color(0xff1877f2),
-                    ),
-                    label: const Text(
-                      'Comentar',
-                      style: TextStyle(
-                        color: Color(0xff1877f2),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    icon: const Icon(Icons.mode_comment_outlined,
+                        color: Color(0xff1877f2)),
+                    label: const Text('Comentar',
+                        style: TextStyle(
+                            color: Color(0xff1877f2),
+                            fontWeight: FontWeight.w600)),
                   ),
                 ),
               ],
@@ -707,62 +846,99 @@ class _FeedPageState extends State<FeedPage> {
     );
   }
 
-  Widget _buildCabecalhoPost(PostModel post, bool isOwnPost, bool isFollowing) {
+  // ── Cabeçalho do post ──────────────────────────────────────────────────────
+
+  Widget _buildCabecalhoPost(
+      PostModel post, bool isOwnPost, bool isFollowing) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        post.authorPhoto.isNotEmpty
-            ? CircleAvatar(
-                radius: 23,
-                backgroundImage: NetworkImage(post.authorPhoto),
-              )
-            : CircleAvatar(
-                radius: 23,
-                backgroundColor: const Color(0xffdbeafe),
-                child: Text(
-                  post.authorName.trim().isNotEmpty
-                      ? post.authorName.trim()[0].toUpperCase()
-                      : '?',
-                  style: const TextStyle(
-                    color: Color(0xff0f4db8),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
+        GestureDetector(
+          onTap: () => _abrirPerfilPublico(post.authorId),
+          child: post.authorPhoto.isNotEmpty
+              ? CircleAvatar(
+                  radius: 23,
+                  backgroundImage: NetworkImage(post.authorPhoto),
+                )
+              : CircleAvatar(
+                  radius: 23,
+                  backgroundColor: const Color(0xffdbeafe),
+                  child: Text(
+                    post.authorName.trim().isNotEmpty
+                        ? post.authorName.trim()[0].toUpperCase()
+                        : '?',
+                    style: const TextStyle(
+                      color: Color(0xff0f4db8),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
                   ),
                 ),
-              ),
+        ),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                post.authorName,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15.5,
-                  color: Color(0xff0f172a),
+              GestureDetector(
+                onTap: () => _abrirPerfilPublico(post.authorId),
+                child: Text(
+                  post.authorName,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15.5,
+                    color: Color(0xff0f172a),
+                  ),
                 ),
               ),
               const SizedBox(height: 2),
-              Text(
-                post.cursoAutor,
-                style: const TextStyle(
-                  color: Color(0xff64748b),
-                  fontSize: 13,
-                ),
-              ),
+              Text(post.cursoAutor,
+                  style: const TextStyle(
+                      color: Color(0xff64748b), fontSize: 13)),
               const SizedBox(height: 2),
-              Text(
-                _formatarTempo(post.createdAt),
-                style: const TextStyle(
-                  color: Color(0xff94a3b8),
-                  fontSize: 12.5,
-                ),
-              ),
+              Text(_formatarTempo(post.createdAt),
+                  style: const TextStyle(
+                      color: Color(0xff94a3b8), fontSize: 12.5)),
             ],
           ),
         ),
-        if (!isOwnPost)
+
+        // Menu de ações do próprio post ou botão seguir
+        if (isOwnPost)
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert,
+                color: Color(0xff94a3b8)),
+            tooltip: 'Opções',
+            onSelected: (value) {
+              if (value == 'editar') _abrirEdicao(post);
+              if (value == 'excluir') _confirmarDelecao(post.id);
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'editar',
+                child: Row(
+                  children: [
+                    Icon(Icons.edit_outlined, size: 18),
+                    SizedBox(width: 8),
+                    Text('Editar'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'excluir',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_outline,
+                        size: 18, color: Colors.red),
+                    SizedBox(width: 8),
+                    Text('Excluir',
+                        style: TextStyle(color: Colors.red)),
+                  ],
+                ),
+              ),
+            ],
+          )
+        else
           OutlinedButton(
             onPressed: () => _store.toggleFollow(post.authorId),
             child: Text(isFollowing ? 'Seguindo' : 'Seguir'),

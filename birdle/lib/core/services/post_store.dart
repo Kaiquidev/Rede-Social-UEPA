@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../models/comment_model.dart';
 import '../../models/post_model.dart';
 
-/// Gerencia o ciclo de vida dos posts: criação, remoção, curtidas e comentários.
+/// Gerencia o ciclo de vida dos posts: criação, edição, remoção, curtidas e comentários.
 class PostStore extends ChangeNotifier {
   final List<PostModel> _posts = <PostModel>[];
 
@@ -29,7 +29,6 @@ class PostStore extends ChangeNotifier {
   // Seed
   // ---------------------------------------------------------------------------
 
-  /// Popula dados iniciais. Chamado apenas uma vez pelo [AppStore].
   void seed(List<PostModel> posts) {
     if (_posts.isNotEmpty) return;
     _posts.addAll(posts);
@@ -67,6 +66,25 @@ class PostStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Edita o conteúdo de um post existente.
+  /// Só permite edição se [requesterId] for o autor do post.
+  bool editPost({
+    required String postId,
+    required String requesterId,
+    required String novoConteudo,
+  }) {
+    final index = _posts.indexWhere((p) => p.id == postId);
+    if (index == -1) return false;
+    if (_posts[index].authorId != requesterId) return false;
+
+    _posts[index] = _posts[index].copyWith(
+      conteudo: novoConteudo.trim(),
+    );
+
+    notifyListeners();
+    return true;
+  }
+
   void removePost(String postId) {
     _posts.removeWhere((post) => post.id == postId);
     notifyListeners();
@@ -97,8 +115,6 @@ class PostStore extends ChangeNotifier {
   // Curtidas
   // ---------------------------------------------------------------------------
 
-  /// Alterna curtida do [userId] no post [postId].
-  /// Retorna `true` se curtiu, `false` se descurtiu.
   bool toggleCurtida({required String postId, required String userId}) {
     final index = _posts.indexWhere((post) => post.id == postId);
     if (index == -1) return false;
@@ -126,9 +142,6 @@ class PostStore extends ChangeNotifier {
   // Comentários
   // ---------------------------------------------------------------------------
 
-  /// Adiciona um comentário ao post [postId].
-  /// Retorna o [PostModel] atualizado (para que o [AppStore] dispare
-  /// a notificação se necessário), ou `null` se o post não for encontrado.
   PostModel? addComment({
     required String postId,
     required String authorId,

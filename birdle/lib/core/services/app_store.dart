@@ -261,6 +261,17 @@ class AppStore extends ChangeNotifier {
 
   void removePost(String postId) => postStore.removePost(postId);
 
+  /// Edita o conteúdo de um post. Só funciona se o usuário logado for o autor.
+  bool editPost({required String postId, required String novoConteudo}) {
+    final uid = authStore.currentUser?.uid;
+    if (uid == null) return false;
+    return postStore.editPost(
+      postId: postId,
+      requesterId: uid,
+      novoConteudo: novoConteudo,
+    );
+  }
+
   void toggleCurtida(String postId) {
     final uid = authStore.currentUser?.uid;
     if (uid == null) return;
