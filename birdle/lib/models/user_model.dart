@@ -14,6 +14,9 @@ class UserModel {
   final List<String> seguidores;
   final List<String> seguindo;
 
+  /// Se `true`, apenas seguidores podem curtir e comentar nos posts.
+  final bool perfilPrivado;
+
   const UserModel({
     required this.uid,
     required this.nomeCompleto,
@@ -29,6 +32,7 @@ class UserModel {
     required this.senha,
     this.seguidores = const [],
     this.seguindo = const [],
+    this.perfilPrivado = false,
   });
 
   bool get isAdmin => tipoPerfil == 'admin';
@@ -48,6 +52,7 @@ class UserModel {
     String? senha,
     List<String>? seguidores,
     List<String>? seguindo,
+    bool? perfilPrivado,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -64,6 +69,7 @@ class UserModel {
       senha: senha ?? this.senha,
       seguidores: seguidores ?? this.seguidores,
       seguindo: seguindo ?? this.seguindo,
+      perfilPrivado: perfilPrivado ?? this.perfilPrivado,
     );
   }
 }

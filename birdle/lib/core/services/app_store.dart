@@ -146,6 +146,27 @@ class AppStore extends ChangeNotifier {
 
   String? registerUser(UserModel user) => userStore.registerUser(user);
 
+  // ---------------------------------------------------------------------------
+  // Privacidade do perfil
+  // ---------------------------------------------------------------------------
+
+  void togglePerfilPrivado() {
+    final uid = authStore.currentUser?.uid;
+    if (uid == null) return;
+
+    final updated = userStore.togglePerfilPrivado(uid);
+    if (updated != null) authStore.syncCurrentUser(updated);
+  }
+
+  /// Retorna `true` se o usuário logado pode curtir/comentar posts de [authorId].
+  bool podeInteragir(String authorId) {
+    final uid = authStore.currentUser?.uid ?? '';
+    return userStore.podeInteragir(
+      viewerId: uid,
+      authorId: authorId,
+    );
+  }
+
   void toggleUserStatus(String userId) {
     final updated = userStore.toggleUserStatus(userId);
     if (updated != null) {
@@ -297,6 +318,51 @@ class AppStore extends ChangeNotifier {
   // ---------------------------------------------------------------------------
   // Comentários
   // ---------------------------------------------------------------------------
+
+  // ---------------------------------------------------------------------------
+  // Toggle comentários ativos no post
+  // ---------------------------------------------------------------------------
+
+  bool toggleComentarios(String postId) {
+    final uid = authStore.currentUser?.uid;
+    if (uid == null) return false;
+    return postStore.toggleComentarios(
+      postId: postId,
+      requesterId: uid,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Editar e excluir comentários
+  // ---------------------------------------------------------------------------
+
+  bool editComment({
+    required String postId,
+    required String commentId,
+    required String novoConteudo,
+  }) {
+    final uid = authStore.currentUser?.uid;
+    if (uid == null) return false;
+    return postStore.editComment(
+      postId: postId,
+      commentId: commentId,
+      requesterId: uid,
+      novoConteudo: novoConteudo,
+    );
+  }
+
+  bool removeComment({
+    required String postId,
+    required String commentId,
+  }) {
+    final uid = authStore.currentUser?.uid;
+    if (uid == null) return false;
+    return postStore.removeComment(
+      postId: postId,
+      commentId: commentId,
+      requesterId: uid,
+    );
+  }
 
   void addComment({required String postId, required String content}) {
     final user = authStore.currentUser;

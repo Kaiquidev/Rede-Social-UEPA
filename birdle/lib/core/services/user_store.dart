@@ -2,8 +2,6 @@ import 'package:flutter/foundation.dart';
 
 import '../../models/user_model.dart';
 
-/// Gerencia usuários, cursos, relacionamentos (seguir/deixar de seguir)
-/// e atualização de perfil.
 class UserStore extends ChangeNotifier {
   final List<UserModel> _users = <UserModel>[];
 
@@ -25,7 +23,6 @@ class UserStore extends ChangeNotifier {
   // ---------------------------------------------------------------------------
 
   List<UserModel> get users => List<UserModel>.unmodifiable(_users);
-
   List<String> get courses => List<String>.from(_courses)..sort();
 
   UserModel? getUserById(String userId) {
@@ -36,17 +33,32 @@ class UserStore extends ChangeNotifier {
     }
   }
 
-  bool isFollowing({required String currentUserId, required String targetUserId}) {
+  bool isFollowing({
+    required String currentUserId,
+    required String targetUserId,
+  }) {
     final me = getUserById(currentUserId);
     if (me == null) return false;
     return me.seguindo.contains(targetUserId);
+  }
+
+  /// Verifica se [viewerId] pode interagir (curtir/comentar) com posts de [authorId].
+  /// Regra: se o autor tem perfil privado, só seguidores podem interagir.
+  bool podeInteragir({
+    required String viewerId,
+    required String authorId,
+  }) {
+    if (viewerId == authorId) return true; // próprio autor sempre pode
+    final author = getUserById(authorId);
+    if (author == null) return false;
+    if (!author.perfilPrivado) return true; // perfil público — todos podem
+    return author.seguidores.contains(viewerId); // privado — só seguidores
   }
 
   // ---------------------------------------------------------------------------
   // Seed
   // ---------------------------------------------------------------------------
 
-  /// Popula dados iniciais. Chamado apenas uma vez pelo [AppStore].
   void seed(List<UserModel> users) {
     if (_users.isNotEmpty) return;
     _users.addAll(users);
@@ -56,7 +68,6 @@ class UserStore extends ChangeNotifier {
   // Registro
   // ---------------------------------------------------------------------------
 
-  /// Registra um novo usuário. Retorna mensagem de erro ou `null` se OK.
   String? registerUser(UserModel user) {
     final emailExists = _users.any(
       (item) => item.email.toLowerCase() == user.email.toLowerCase(),
@@ -67,11 +78,7 @@ class UserStore extends ChangeNotifier {
     if (cpfExists) return 'Este CPF já está cadastrado.';
 
     _users.add(user);
-
-    if (!_courses.contains(user.curso)) {
-      _courses.add(user.curso);
-    }
-
+    if (!_courses.contains(user.curso)) _courses.add(user.curso);
     notifyListeners();
     return null;
   }
@@ -80,8 +87,6 @@ class UserStore extends ChangeNotifier {
   // Perfil
   // ---------------------------------------------------------------------------
 
-  /// Atualiza o perfil do usuário identificado por [uid].
-  /// Retorna o [UserModel] atualizado para que o [AuthStore] possa sincronizar.
   UserModel? updateProfile({
     required String uid,
     required String nomeCompleto,
@@ -107,12 +112,24 @@ class UserStore extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------------
+  // Toggle perfil privado
+  // ---------------------------------------------------------------------------
+
+  UserModel? togglePerfilPrivado(String uid) {
+    final index = _users.indexWhere((u) => u.uid == uid);
+    if (index == -1) return null;
+
+    final updated =
+        _users[index].copyWith(perfilPrivado: !_users[index].perfilPrivado);
+    _users[index] = updated;
+    notifyListeners();
+    return updated;
+  }
+
+  // ---------------------------------------------------------------------------
   // Seguir / Deixar de seguir
   // ---------------------------------------------------------------------------
 
-  /// Alterna o estado de seguir entre [currentUserId] e [targetUserId].
-  /// Retorna `true` se passou a seguir, `false` se deixou de seguir,
-  /// `null` se a operação não pôde ser realizada.
   bool? toggleFollow({
     required String currentUserId,
     required String targetUserId,
@@ -121,14 +138,14 @@ class UserStore extends ChangeNotifier {
 
     final myIndex = _users.indexWhere((u) => u.uid == currentUserId);
     final targetIndex = _users.indexWhere((u) => u.uid == targetUserId);
-
     if (myIndex == -1 || targetIndex == -1) return null;
 
     final me = _users[myIndex];
     final target = _users[targetIndex];
 
     final myFollowing = List<String>.from(me.seguindo, growable: true);
-    final targetFollowers = List<String>.from(target.seguidores, growable: true);
+    final targetFollowers =
+        List<String>.from(target.seguidores, growable: true);
 
     final nowFollowing = !myFollowing.contains(targetUserId);
 
@@ -148,12 +165,9 @@ class UserStore extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------------
-  // Administração de usuários
+  // Admin
   // ---------------------------------------------------------------------------
 
-  /// Alterna o status ativo/inativo de um usuário.
-  /// Retorna o [UserModel] atualizado para que o [AuthStore] possa invalidar
-  /// a sessão se necessário.
   UserModel? toggleUserStatus(String userId) {
     final index = _users.indexWhere((user) => user.uid == userId);
     if (index == -1) return null;
@@ -181,7 +195,6 @@ class UserStore extends ChangeNotifier {
 
     final index = _courses.indexOf(oldName);
     if (index == -1) return;
-
     _courses[index] = novo;
 
     for (int i = 0; i < _users.length; i++) {
@@ -189,7 +202,6 @@ class UserStore extends ChangeNotifier {
         _users[i] = _users[i].copyWith(curso: novo);
       }
     }
-
     notifyListeners();
   }
 

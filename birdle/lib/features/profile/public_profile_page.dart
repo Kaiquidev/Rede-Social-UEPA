@@ -237,6 +237,9 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
     final posts = _controller.postsByUser(userId);
     final isFollowing = _controller.isFollowing(userId);
     final isOwnProfile = _controller.currentUserId == userId;
+    final podeInteragir = isOwnProfile ||
+        !user.perfilPrivado ||
+        user.seguidores.contains(_controller.currentUserId ?? '');
 
     return Scaffold(
       appBar: AppBar(
@@ -276,6 +279,33 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                     ),
                     const SizedBox(height: 8),
                     _tipoBadge(user.tipoPerfil),
+                    if (user.perfilPrivado) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xfff1f5f9),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.lock_outline,
+                                size: 11, color: Color(0xff64748b)),
+                            SizedBox(width: 3),
+                            Text(
+                              'Privado',
+                              style: TextStyle(
+                                color: Color(0xff64748b),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 16),
 
                     // Métricas
@@ -373,6 +403,31 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                 ),
               ),
             ),
+
+            // ── Aviso de perfil privado ────────────────────────────────
+            if (user.perfilPrivado && !podeInteragir)
+              Card(
+                margin: const EdgeInsets.only(bottom: 16),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: const [
+                      Icon(Icons.lock_outline,
+                          color: Color(0xff94a3b8), size: 20),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Este perfil é privado. Siga para poder curtir e comentar.',
+                          style: TextStyle(
+                            color: Color(0xff64748b),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
 
             // ── Publicações ────────────────────────────────────────────
             Padding(

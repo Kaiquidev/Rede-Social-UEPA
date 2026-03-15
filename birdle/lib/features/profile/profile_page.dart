@@ -339,6 +339,53 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
             ),
 
+            // ── Privacidade ──────────────────────────────────────────────
+            Card(
+              margin: const EdgeInsets.only(bottom: 16),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 20, vertical: 14),
+                child: Row(
+                  children: [
+                    const Icon(Icons.lock_outline,
+                        color: Color(0xff1877f2), size: 22),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Perfil privado',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                              color: Color(0xff0f172a),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            user.perfilPrivado
+                                ? 'Apenas seus seguidores podem curtir e comentar.'
+                                : 'Qualquer pessoa pode curtir e comentar.',
+                            style: const TextStyle(
+                              color: Color(0xff64748b),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: user.perfilPrivado,
+                      onChanged: (_) {
+                        _store.togglePerfilPrivado();
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
             // ── Publicações ──────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.only(bottom: 12),

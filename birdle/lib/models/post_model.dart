@@ -16,6 +16,9 @@ class PostModel {
   final List<String> likedByUserIds;
   final List<CommentModel> comments;
 
+  /// Se `false`, ninguém pode comentar neste post (exceto o autor).
+  final bool comentariosAtivos;
+
   const PostModel({
     required this.id,
     required this.authorId,
@@ -29,6 +32,7 @@ class PostModel {
     this.mediaPath = '',
     this.likedByUserIds = const [],
     this.comments = const [],
+    this.comentariosAtivos = true,
   });
 
   bool isLikedBy(String userId) => likedByUserIds.contains(userId);
@@ -46,6 +50,7 @@ class PostModel {
     String? mediaPath,
     List<String>? likedByUserIds,
     List<CommentModel>? comments,
+    bool? comentariosAtivos,
   }) {
     return PostModel(
       id: id ?? this.id,
@@ -60,6 +65,7 @@ class PostModel {
       mediaPath: mediaPath ?? this.mediaPath,
       likedByUserIds: likedByUserIds ?? this.likedByUserIds,
       comments: comments ?? this.comments,
+      comentariosAtivos: comentariosAtivos ?? this.comentariosAtivos,
     );
   }
 }
