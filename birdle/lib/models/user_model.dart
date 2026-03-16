@@ -13,9 +13,13 @@ class UserModel {
   final String senha;
   final List<String> seguidores;
   final List<String> seguindo;
-
-  /// Se `true`, apenas seguidores podem curtir e comentar nos posts.
   final bool perfilPrivado;
+
+  /// UIDs bloqueados — usuários bloqueados não podem seguir nem ver posts.
+  final List<String> bloqueados;
+
+  /// UIDs com solicitação de seguimento pendente (usado quando perfil é privado).
+  final List<String> solicitacoesPendentes;
 
   const UserModel({
     required this.uid,
@@ -33,9 +37,14 @@ class UserModel {
     this.seguidores = const [],
     this.seguindo = const [],
     this.perfilPrivado = false,
+    this.bloqueados = const [],
+    this.solicitacoesPendentes = const [],
   });
 
   bool get isAdmin => tipoPerfil == 'admin';
+
+  bool isBloqueado(String uid) => bloqueados.contains(uid);
+  bool temSolicitacao(String uid) => solicitacoesPendentes.contains(uid);
 
   UserModel copyWith({
     String? uid,
@@ -53,6 +62,8 @@ class UserModel {
     List<String>? seguidores,
     List<String>? seguindo,
     bool? perfilPrivado,
+    List<String>? bloqueados,
+    List<String>? solicitacoesPendentes,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -70,6 +81,9 @@ class UserModel {
       seguidores: seguidores ?? this.seguidores,
       seguindo: seguindo ?? this.seguindo,
       perfilPrivado: perfilPrivado ?? this.perfilPrivado,
+      bloqueados: bloqueados ?? this.bloqueados,
+      solicitacoesPendentes:
+          solicitacoesPendentes ?? this.solicitacoesPendentes,
     );
   }
 }

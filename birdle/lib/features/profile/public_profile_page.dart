@@ -240,6 +240,8 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
     final podeInteragir = isOwnProfile ||
         !user.perfilPrivado ||
         user.seguidores.contains(_controller.currentUserId ?? '');
+    final isBloqueado = _store.isBloqueado(userId);
+    final hasPending = _store.hasPendingRequest(userId);
 
     return Scaffold(
       appBar: AppBar(
@@ -320,27 +322,46 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                       ],
                     ),
 
-                    // Botão seguir (oculto no próprio perfil)
-                    if (!isOwnProfile) ...[
+                    // Botão seguir (oculto no próprio perfil e bloqueados)
+                    if (!isOwnProfile && !isBloqueado) ...[
                       const SizedBox(height: 16),
                       SizedBox(
                         width: double.infinity,
                         height: 42,
                         child: isFollowing
                             ? OutlinedButton.icon(
-                                onPressed: () {
-                                  _controller.toggleFollow(userId);
-                                },
+                                onPressed: () =>
+                                    _controller.toggleFollow(userId),
                                 icon: const Icon(Icons.person_remove_outlined),
                                 label: const Text('Seguindo'),
                               )
-                            : ElevatedButton.icon(
-                                onPressed: () {
-                                  _controller.toggleFollow(userId);
-                                },
-                                icon: const Icon(Icons.person_add_outlined),
-                                label: const Text('Seguir'),
-                              ),
+                            : hasPending
+                                ? OutlinedButton.icon(
+                                    onPressed: () =>
+                                        _controller.toggleFollow(userId),
+                                    icon: const Icon(Icons.hourglass_top_outlined),
+                                    label: const Text('Solicitado'),
+                                  )
+                                : ElevatedButton.icon(
+                                    onPressed: () =>
+                                        _controller.toggleFollow(userId),
+                                    icon: const Icon(Icons.person_add_outlined),
+                                    label: const Text('Seguir'),
+                                  ),
+                      ),
+                    ],
+                    if (isBloqueado) ...[
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 42,
+                        child: OutlinedButton.icon(
+                          onPressed: () => _store.desbloquear(userId),
+                          icon: const Icon(Icons.block_outlined,
+                              color: Colors.red),
+                          label: const Text('Bloqueado',
+                              style: TextStyle(color: Colors.red)),
+                        ),
                       ),
                     ],
                   ],

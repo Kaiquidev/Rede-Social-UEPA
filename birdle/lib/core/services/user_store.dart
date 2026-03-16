@@ -2,6 +2,15 @@ import 'package:flutter/foundation.dart';
 
 import '../../models/user_model.dart';
 
+/// Resultado do toggleFollow — indica o que aconteceu.
+enum FollowResult {
+  seguindo,        // passou a seguir (perfil público)
+  deixouDeSeguir,  // deixou de seguir
+  solicitacaoEnviada,  // perfil privado — solicitação enviada
+  solicitacaoCancelada, // cancelou solicitação pendente
+  bloqueado,       // tentou seguir alguém que o bloqueou
+}
+
 class UserStore extends ChangeNotifier {
   final List<UserModel> _users = <UserModel>[];
 
@@ -42,17 +51,37 @@ class UserStore extends ChangeNotifier {
     return me.seguindo.contains(targetUserId);
   }
 
-  /// Verifica se [viewerId] pode interagir (curtir/comentar) com posts de [authorId].
-  /// Regra: se o autor tem perfil privado, só seguidores podem interagir.
+  bool hasPendingRequest({
+    required String fromUserId,
+    required String toUserId,
+  }) {
+    final target = getUserById(toUserId);
+    if (target == null) return false;
+    return target.solicitacoesPendentes.contains(fromUserId);
+  }
+
+  bool isBloqueado({
+    required String byUserId,
+    required String targetUserId,
+  }) {
+    final user = getUserById(byUserId);
+    if (user == null) return false;
+    return user.bloqueados.contains(targetUserId);
+  }
+
   bool podeInteragir({
     required String viewerId,
     required String authorId,
   }) {
-    if (viewerId == authorId) return true; // próprio autor sempre pode
+    if (viewerId == authorId) return true;
+
+    // Verifica se o viewer foi bloqueado pelo autor
     final author = getUserById(authorId);
     if (author == null) return false;
-    if (!author.perfilPrivado) return true; // perfil público — todos podem
-    return author.seguidores.contains(viewerId); // privado — só seguidores
+    if (author.bloqueados.contains(viewerId)) return false;
+
+    if (!author.perfilPrivado) return true;
+    return author.seguidores.contains(viewerId);
   }
 
   // ---------------------------------------------------------------------------
@@ -111,10 +140,6 @@ class UserStore extends ChangeNotifier {
     return updated;
   }
 
-  // ---------------------------------------------------------------------------
-  // Toggle perfil privado
-  // ---------------------------------------------------------------------------
-
   UserModel? togglePerfilPrivado(String uid) {
     final index = _users.indexWhere((u) => u.uid == uid);
     if (index == -1) return null;
@@ -127,41 +152,194 @@ class UserStore extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------------
-  // Seguir / Deixar de seguir
+  // Seguir / Solicitação
   // ---------------------------------------------------------------------------
 
-  bool? toggleFollow({
+  /// Alterna o estado de seguir.
+  /// - Perfil público: segue/deixa de seguir imediatamente.
+  /// - Perfil privado: envia/cancela solicitação pendente.
+  /// - Bloqueado: retorna [FollowResult.bloqueado].
+  FollowResult toggleFollow({
     required String currentUserId,
     required String targetUserId,
   }) {
-    if (currentUserId == targetUserId) return null;
+    if (currentUserId == targetUserId) return FollowResult.deixouDeSeguir;
 
     final myIndex = _users.indexWhere((u) => u.uid == currentUserId);
     final targetIndex = _users.indexWhere((u) => u.uid == targetUserId);
-    if (myIndex == -1 || targetIndex == -1) return null;
+    if (myIndex == -1 || targetIndex == -1) return FollowResult.deixouDeSeguir;
 
     final me = _users[myIndex];
     final target = _users[targetIndex];
 
-    final myFollowing = List<String>.from(me.seguindo, growable: true);
-    final targetFollowers =
-        List<String>.from(target.seguidores, growable: true);
-
-    final nowFollowing = !myFollowing.contains(targetUserId);
-
-    if (nowFollowing) {
-      myFollowing.add(targetUserId);
-      targetFollowers.add(currentUserId);
-    } else {
-      myFollowing.remove(targetUserId);
-      targetFollowers.remove(currentUserId);
+    // Bloqueado pelo alvo
+    if (target.bloqueados.contains(currentUserId)) {
+      return FollowResult.bloqueado;
     }
+
+    // Já segue — deixar de seguir
+    if (me.seguindo.contains(targetUserId)) {
+      final myFollowing =
+          List<String>.from(me.seguindo, growable: true)..remove(targetUserId);
+      final targetFollowers = List<String>.from(target.seguidores,
+          growable: true)
+        ..remove(currentUserId);
+
+      _users[myIndex] = me.copyWith(seguindo: myFollowing);
+      _users[targetIndex] = target.copyWith(seguidores: targetFollowers);
+      notifyListeners();
+      return FollowResult.deixouDeSeguir;
+    }
+
+    // Perfil privado — solicitação
+    if (target.perfilPrivado) {
+      final pendentes = List<String>.from(target.solicitacoesPendentes,
+          growable: true);
+
+      if (pendentes.contains(currentUserId)) {
+        // Cancela solicitação
+        pendentes.remove(currentUserId);
+        _users[targetIndex] =
+            target.copyWith(solicitacoesPendentes: pendentes);
+        notifyListeners();
+        return FollowResult.solicitacaoCancelada;
+      } else {
+        // Envia solicitação
+        pendentes.add(currentUserId);
+        _users[targetIndex] =
+            target.copyWith(solicitacoesPendentes: pendentes);
+        notifyListeners();
+        return FollowResult.solicitacaoEnviada;
+      }
+    }
+
+    // Perfil público — segue imediatamente
+    final myFollowing =
+        List<String>.from(me.seguindo, growable: true)..add(targetUserId);
+    final targetFollowers =
+        List<String>.from(target.seguidores, growable: true)
+          ..add(currentUserId);
 
     _users[myIndex] = me.copyWith(seguindo: myFollowing);
     _users[targetIndex] = target.copyWith(seguidores: targetFollowers);
+    notifyListeners();
+    return FollowResult.seguindo;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Aceitar / Negar solicitação
+  // ---------------------------------------------------------------------------
+
+  /// Aceita a solicitação de [requesterId] para seguir o usuário [targetId].
+  bool aceitarSolicitacao({
+    required String targetId,
+    required String requesterId,
+  }) {
+    final myIndex = _users.indexWhere((u) => u.uid == targetId);
+    final requesterIndex = _users.indexWhere((u) => u.uid == requesterId);
+    if (myIndex == -1 || requesterIndex == -1) return false;
+
+    final me = _users[myIndex];
+    final requester = _users[requesterIndex];
+
+    if (!me.solicitacoesPendentes.contains(requesterId)) return false;
+
+    final pendentes = List<String>.from(me.solicitacoesPendentes,
+        growable: true)..remove(requesterId);
+    final seguidores =
+        List<String>.from(me.seguidores, growable: true)..add(requesterId);
+    final seguindo =
+        List<String>.from(requester.seguindo, growable: true)..add(targetId);
+
+    _users[myIndex] = me.copyWith(
+      solicitacoesPendentes: pendentes,
+      seguidores: seguidores,
+    );
+    _users[requesterIndex] = requester.copyWith(seguindo: seguindo);
 
     notifyListeners();
-    return nowFollowing;
+    return true;
+  }
+
+  /// Nega a solicitação de [requesterId].
+  bool negarSolicitacao({
+    required String targetId,
+    required String requesterId,
+  }) {
+    final myIndex = _users.indexWhere((u) => u.uid == targetId);
+    if (myIndex == -1) return false;
+
+    final me = _users[myIndex];
+    if (!me.solicitacoesPendentes.contains(requesterId)) return false;
+
+    final pendentes = List<String>.from(me.solicitacoesPendentes,
+        growable: true)..remove(requesterId);
+
+    _users[myIndex] = me.copyWith(solicitacoesPendentes: pendentes);
+    notifyListeners();
+    return true;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Bloquear / Desbloquear
+  // ---------------------------------------------------------------------------
+
+  /// Bloqueia [targetId] para o usuário [userId].
+  /// Remove automaticamente o relacionamento de seguir em ambos os sentidos.
+  void bloquear({required String userId, required String targetId}) {
+    final myIndex = _users.indexWhere((u) => u.uid == userId);
+    final targetIndex = _users.indexWhere((u) => u.uid == targetId);
+    if (myIndex == -1 || targetIndex == -1) return;
+
+    final me = _users[myIndex];
+    final target = _users[targetIndex];
+
+    final bloqueados =
+        List<String>.from(me.bloqueados, growable: true)..add(targetId);
+
+    // Remove qualquer relacionamento de seguir
+    final myFollowing =
+        List<String>.from(me.seguindo, growable: true)..remove(targetId);
+    final myFollowers =
+        List<String>.from(me.seguidores, growable: true)..remove(targetId);
+    final targetFollowing =
+        List<String>.from(target.seguindo, growable: true)..remove(userId);
+    final targetFollowers =
+        List<String>.from(target.seguidores, growable: true)..remove(userId);
+
+    // Remove solicitações pendentes
+    final myPendentes =
+        List<String>.from(me.solicitacoesPendentes, growable: true)
+          ..remove(targetId);
+    final targetPendentes =
+        List<String>.from(target.solicitacoesPendentes, growable: true)
+          ..remove(userId);
+
+    _users[myIndex] = me.copyWith(
+      bloqueados: bloqueados,
+      seguindo: myFollowing,
+      seguidores: myFollowers,
+      solicitacoesPendentes: myPendentes,
+    );
+    _users[targetIndex] = target.copyWith(
+      seguindo: targetFollowing,
+      seguidores: targetFollowers,
+      solicitacoesPendentes: targetPendentes,
+    );
+
+    notifyListeners();
+  }
+
+  void desbloquear({required String userId, required String targetId}) {
+    final myIndex = _users.indexWhere((u) => u.uid == userId);
+    if (myIndex == -1) return;
+
+    final me = _users[myIndex];
+    final bloqueados =
+        List<String>.from(me.bloqueados, growable: true)..remove(targetId);
+
+    _users[myIndex] = me.copyWith(bloqueados: bloqueados);
+    notifyListeners();
   }
 
   // ---------------------------------------------------------------------------

@@ -977,6 +977,7 @@ class _FeedPageState extends State<FeedPage> {
     final author = _store.getUserById(post.authorId);
     final isFollowing =
         author == null ? false : _store.isFollowing(author.uid);
+    final hasPending = _store.hasPendingRequest(post.authorId);
     final podeInteragir = _store.podeInteragir(post.authorId);
 
     return Card(
@@ -1101,6 +1102,8 @@ class _FeedPageState extends State<FeedPage> {
 
   Widget _buildCabecalhoPost(
       PostModel post, bool isOwnPost, bool isFollowing) {
+    final hasPending = _store.hasPendingRequest(post.authorId);
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1208,10 +1211,43 @@ class _FeedPageState extends State<FeedPage> {
             ],
           )
         else
-          OutlinedButton(
-            onPressed: () => _store.toggleFollow(post.authorId),
-            child: Text(isFollowing ? 'Seguindo' : 'Seguir'),
-          ),
+          // Botão seguir com 3 estados: Seguir / Solicitado / Seguindo
+          isFollowing
+              ? OutlinedButton(
+                  onPressed: () => _store.toggleFollow(post.authorId),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: const Text('Seguindo'),
+                )
+              : hasPending
+                  ? OutlinedButton.icon(
+                      onPressed: () => _store.toggleFollow(post.authorId),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        foregroundColor: const Color(0xff64748b),
+                      ),
+                      icon: const Icon(Icons.hourglass_top_outlined,
+                          size: 14),
+                      label: const Text('Solicitado',
+                          style: TextStyle(fontSize: 13)),
+                    )
+                  : ElevatedButton(
+                      onPressed: () => _store.toggleFollow(post.authorId),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const Text('Seguir'),
+                    ),
       ],
     );
   }

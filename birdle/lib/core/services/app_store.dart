@@ -7,7 +7,7 @@ import '../../models/user_model.dart';
 import 'auth_store.dart';
 import 'notification_store.dart';
 import 'post_store.dart';
-import 'user_store.dart';
+import 'user_store.dart' show UserStore, FollowResult;
 
 class AppStore extends ChangeNotifier {
   AppStore._internal() {
@@ -187,7 +187,7 @@ class AppStore extends ChangeNotifier {
     final uid = authStore.currentUser?.uid;
     if (uid == null) return;
 
-    final nowFollowing = userStore.toggleFollow(
+    final result = userStore.toggleFollow(
       currentUserId: uid,
       targetUserId: targetUserId,
     );
@@ -195,16 +195,106 @@ class AppStore extends ChangeNotifier {
     final updatedMe = userStore.getUserById(uid);
     if (updatedMe != null) authStore.syncCurrentUser(updatedMe);
 
-    if (nowFollowing == true) {
+    final me = authStore.currentUser;
+    if (me == null) return;
+
+    if (result == FollowResult.seguindo) {
+      notificationStore.add(
+        userId: targetUserId,
+        title: 'Novo seguidor',
+        body: '${me.nomeCompleto} começou a seguir você.',
+      );
+    } else if (result == FollowResult.solicitacaoEnviada) {
+      notificationStore.add(
+        userId: targetUserId,
+        title: 'Solicitação de seguimento',
+        body: '${me.nomeCompleto} quer seguir você.',
+      );
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Solicitações de seguimento
+  // ---------------------------------------------------------------------------
+
+  List<String> get solicitacoesPendentes {
+    final uid = authStore.currentUser?.uid;
+    if (uid == null) return [];
+    return userStore.getUserById(uid)?.solicitacoesPendentes ?? [];
+  }
+
+  bool hasPendingRequest(String targetUserId) {
+    final uid = authStore.currentUser?.uid;
+    if (uid == null) return false;
+    return userStore.hasPendingRequest(
+      fromUserId: uid,
+      toUserId: targetUserId,
+    );
+  }
+
+  void aceitarSolicitacao(String requesterId) {
+    final uid = authStore.currentUser?.uid;
+    if (uid == null) return;
+
+    final ok = userStore.aceitarSolicitacao(
+      targetId: uid,
+      requesterId: requesterId,
+    );
+
+    if (ok) {
+      final updatedMe = userStore.getUserById(uid);
+      if (updatedMe != null) authStore.syncCurrentUser(updatedMe);
+
       final me = authStore.currentUser;
       if (me != null) {
         notificationStore.add(
-          userId: targetUserId,
-          title: 'Novo seguidor',
-          body: '${me.nomeCompleto} começou a seguir você.',
+          userId: requesterId,
+          title: 'Solicitação aceita',
+          body: '${me.nomeCompleto} aceitou seu pedido de seguimento.',
         );
       }
     }
+  }
+
+  void negarSolicitacao(String requesterId) {
+    final uid = authStore.currentUser?.uid;
+    if (uid == null) return;
+
+    final ok = userStore.negarSolicitacao(
+      targetId: uid,
+      requesterId: requesterId,
+    );
+
+    if (ok) {
+      final updatedMe = userStore.getUserById(uid);
+      if (updatedMe != null) authStore.syncCurrentUser(updatedMe);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Bloquear / Desbloquear
+  // ---------------------------------------------------------------------------
+
+  void bloquear(String targetId) {
+    final uid = authStore.currentUser?.uid;
+    if (uid == null) return;
+    userStore.bloquear(userId: uid, targetId: targetId);
+    final updatedMe = userStore.getUserById(uid);
+    if (updatedMe != null) authStore.syncCurrentUser(updatedMe);
+  }
+
+  void desbloquear(String targetId) {
+    final uid = authStore.currentUser?.uid;
+    if (uid == null) return;
+    userStore.desbloquear(userId: uid, targetId: targetId);
+    final updatedMe = userStore.getUserById(uid);
+    if (updatedMe != null) authStore.syncCurrentUser(updatedMe);
+  }
+
+  bool isBloqueado(String targetId) {
+    final uid = authStore.currentUser?.uid;
+    if (uid == null) return false;
+    return userStore.isBloqueado(byUserId: uid, targetUserId: targetId);
   }
 
   // ---------------------------------------------------------------------------
