@@ -16,11 +16,11 @@ class UepaApp extends StatelessWidget {
       theme: appTheme,
       initialRoute: AppRoutes.splash,
       routes: AppRoutes.routes,
-      // Envolve toda a navegação com scroll por botão esquerdo
-      // e teclado virtual
+      // VirtualKeyboard por fora: recebe os constraints reais da janela
+      // MouseScrollWrapper por dentro: não interfere no tamanho do teclado
       builder: (context, child) {
-        return MouseScrollWrapper(
-          child: VirtualKeyboard(
+        return VirtualKeyboard(
+          child: MouseScrollWrapper(
             child: child ?? const SizedBox(),
           ),
         );

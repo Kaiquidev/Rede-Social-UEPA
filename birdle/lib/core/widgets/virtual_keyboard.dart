@@ -43,7 +43,7 @@ class VirtualKeyboardController extends ChangeNotifier {
 
   void _type(String char) {
     final state = _editableState;
-    if (state == null) return;
+    if (state == null || !state.mounted) return;
     final value = state.textEditingValue;
     final sel = value.selection.isValid
         ? value.selection
@@ -57,7 +57,7 @@ class VirtualKeyboardController extends ChangeNotifier {
 
   void _backspace() {
     final state = _editableState;
-    if (state == null) return;
+    if (state == null || !state.mounted) return;
     final value = state.textEditingValue;
     final text = value.text;
     if (text.isEmpty) return;
@@ -87,6 +87,28 @@ class VirtualKeyboardController extends ChangeNotifier {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers de dimensão
+//
+// Largura natural calculada exatamente:
+//   padding lateral: 2 × 12 = 24
+//   row1 (10 teclas): cada _Key tem padding horizontal sp/2 de cada lado
+//     → largura por tecla = keyW + sp = 36 + 4 = 40
+//     → 10 × 40 = 400
+//   total = 24 + 400 = 424 + 4 de margem = 428px
+//
+// Scale = avW / 428 → teclado sempre cabe sem overflow
+// ─────────────────────────────────────────────────────────────────────────────
+const double _kbNaturalWidth = 446.0;
+
+double _kbWidth(double avW) => avW.clamp(0.0, _kbNaturalWidth);
+double _kbScale(double avW) =>
+    (_kbWidth(avW) / _kbNaturalWidth).clamp(0.1, 1.0);
+double _kbHeight(double avW) => 180.0 * _kbScale(avW);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Widget raiz
+// ─────────────────────────────────────────────────────────────────────────────
 class VirtualKeyboard extends StatefulWidget {
   const VirtualKeyboard({super.key, required this.child});
   final Widget child;
@@ -119,7 +141,6 @@ class _VirtualKeyboardState extends State<VirtualKeyboard> {
   void _onPointerDown(PointerDownEvent event) {
     if (_kb._suppressed) return;
 
-    // Clicou dentro do teclado? Não faz nada
     final keyboardBox =
         _keyboardKey.currentContext?.findRenderObject() as RenderBox?;
     if (keyboardBox != null) {
@@ -127,7 +148,6 @@ class _VirtualKeyboardState extends State<VirtualKeyboard> {
       if (rect.contains(event.position)) return;
     }
 
-    // Clicou num TextField? Abre o teclado
     EditableTextState? foundField;
     RenderBox? fieldBox;
 
@@ -162,46 +182,87 @@ class _VirtualKeyboardState extends State<VirtualKeyboard> {
     return Listener(
       onPointerDown: _onPointerDown,
       behavior: HitTestBehavior.translucent,
-      child: Stack(
-        children: [
-          widget.child,
-          if (_kb.visible)
-            _FloatingKeyboard(kb: _kb, keyboardKey: _keyboardKey),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final avW = constraints.maxWidth;
+          final avH = constraints.maxHeight;
+
+          return Stack(
+            clipBehavior: Clip.hardEdge,
+            children: [
+              Positioned.fill(child: widget.child),
+              if (_kb.visible)
+                _FloatingKeyboard(
+                  kb: _kb,
+                  keyboardKey: _keyboardKey,
+                  avW: avW,
+                  avH: avH,
+                ),
+            ],
+          );
+        },
       ),
     );
   }
 }
 
-/// Teclado flutuante posicionado como card abaixo do campo clicado
-class _FloatingKeyboard extends StatelessWidget {
-  const _FloatingKeyboard({required this.kb, required this.keyboardKey});
+// ─────────────────────────────────────────────────────────────────────────────
+// Teclado flutuante
+// ─────────────────────────────────────────────────────────────────────────────
+class _FloatingKeyboard extends StatefulWidget {
+  const _FloatingKeyboard({
+    required this.kb,
+    required this.keyboardKey,
+    required this.avW,
+    required this.avH,
+  });
   final VirtualKeyboardController kb;
   final GlobalKey keyboardKey;
+  final double avW;
+  final double avH;
+
+  @override
+  State<_FloatingKeyboard> createState() => _FloatingKeyboardState();
+}
+
+class _FloatingKeyboardState extends State<_FloatingKeyboard> {
+  Offset? _position;
+  Offset? _lastFieldPos;
+
+  Offset _defaultPosition(double kbW, double kbH) {
+    final fieldTop = widget.kb.fieldPosition.dy;
+    final fieldBottom = fieldTop + widget.kb.fieldHeight;
+
+    final left = ((widget.avW - kbW) / 2).clamp(0.0, widget.avW - kbW);
+    double top = widget.avH - kbH - 16;
+
+    if (fieldBottom > top - 8) {
+      top = (fieldTop - kbH - 8).clamp(0.0, widget.avH - kbH);
+    }
+
+    return Offset(left, top);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final screenSize = MediaQuery.of(context).size;
-    final keyboardWidth = screenSize.width.clamp(0.0, 680.0);
-    const keyboardEstimatedHeight = 280.0;
+    final kbW = _kbWidth(widget.avW);
+    final kbH = _kbHeight(widget.avW);
 
-    // Centraliza horizontalmente
-    final left =
-        ((screenSize.width - keyboardWidth) / 2).clamp(0.0, screenSize.width);
-
-    // Posiciona abaixo do campo
-    double top = kb.fieldPosition.dy + kb.fieldHeight + 8;
-    if (top + keyboardEstimatedHeight > screenSize.height - 20) {
-      top = kb.fieldPosition.dy - keyboardEstimatedHeight - 8;
+    final fieldPos = widget.kb.fieldPosition;
+    if (_position == null || _lastFieldPos != fieldPos) {
+      _lastFieldPos = fieldPos;
+      _position = _defaultPosition(kbW, kbH);
     }
-    if (top < 60) top = 60;
+
+    final safeLeft = _position!.dx.clamp(0.0, widget.avW - kbW);
+    final safeTop = _position!.dy.clamp(0.0, widget.avH - kbH);
 
     return Positioned(
-      left: left,
-      top: top,
-      width: keyboardWidth,
+      left: safeLeft,
+      top: safeTop,
+      width: kbW,
       child: Material(
-        key: keyboardKey,
+        key: widget.keyboardKey,
         elevation: 8,
         borderRadius: BorderRadius.circular(16),
         color: Colors.transparent,
@@ -218,16 +279,55 @@ class _FloatingKeyboard extends StatelessWidget {
               ),
             ],
           ),
-          child: _KeyboardWidget(kb: kb),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              GestureDetector(
+                onPanUpdate: (details) {
+                  setState(() {
+                    _position = Offset(
+                      (_position!.dx + details.delta.dx)
+                          .clamp(0.0, widget.avW - kbW),
+                      (_position!.dy + details.delta.dy)
+                          .clamp(0.0, widget.avH - kbH),
+                    );
+                  });
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: const BoxDecoration(
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(16)),
+                  ),
+                  child: Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xffcbd5e1),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              _KeyboardWidget(kb: widget.kb, avW: widget.avW),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Teclas
+// ─────────────────────────────────────────────────────────────────────────────
 class _KeyboardWidget extends StatelessWidget {
-  const _KeyboardWidget({required this.kb});
+  const _KeyboardWidget({required this.kb, required this.avW});
   final VirtualKeyboardController kb;
+  final double avW;
 
   static const _row1 = ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'];
   static const _row2 = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'];
@@ -238,61 +338,96 @@ class _KeyboardWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final upper = kb._uppercase;
+    final s = _kbScale(avW);
+
+    final keyW = 36.0 * s;
+    final keyH = 42.0 * s;
+    final sp = 4.0 * s;
+    final rowSp = 6.0 * s;
+    final fs = 15.0 * s;
+    final fsS = 11.0 * s;
+
+    final kbW = _kbWidth(avW);
+    final innerW = kbW - 2 * 12 * s;
+    final spaceW = (innerW - (44 * s + sp + 52 * s + sp + 44 * s + sp * 3))
+        .clamp(40 * s, 230 * s);
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+      padding: EdgeInsets.fromLTRB(12 * s, 0, 12 * s, 16 * s),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Handle de arrastar (visual)
-          Container(
-            width: 40,
-            height: 4,
-            margin: const EdgeInsets.only(bottom: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xffcbd5e1),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          _buildRow(upper ? _symbols : _numbers, upper: false),
-          const SizedBox(height: 6),
-          _buildRow(_row1, upper: upper),
-          const SizedBox(height: 6),
-          _buildRow(_row2, upper: upper),
-          const SizedBox(height: 6),
+          _row(upper ? _symbols : _numbers,
+              upper: false, keyW: keyW, keyH: keyH, sp: sp, fs: fs, fsS: fsS),
+          SizedBox(height: rowSp),
+          _row(_row1,
+              upper: upper, keyW: keyW, keyH: keyH, sp: sp, fs: fs, fsS: fsS),
+          SizedBox(height: rowSp),
+          _row(_row2,
+              upper: upper, keyW: keyW, keyH: keyH, sp: sp, fs: fs, fsS: fsS),
+          SizedBox(height: rowSp),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              _ShiftKey(kb: kb),
-              const SizedBox(width: 4),
+              _ShiftKey(kb: kb, w: 46 * s, h: keyH),
+              SizedBox(width: sp),
               ..._row3.map<Widget>((k) => _Key(
                     label: upper ? k.toUpperCase() : k,
                     onTap: () => kb._type(upper ? k.toUpperCase() : k),
+                    w: keyW,
+                    h: keyH,
+                    sp: sp,
+                    fs: fs,
+                    fsS: fsS,
                   )),
-              const SizedBox(width: 4),
-              _BackspaceKey(kb: kb),
+              SizedBox(width: sp),
+              _BackspaceKey(kb: kb, w: 46 * s, h: keyH),
             ],
           ),
-          const SizedBox(height: 6),
+          SizedBox(height: rowSp),
           Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              _Key(label: '.,', width: 44, onTap: () => kb._type('.')),
-              const SizedBox(width: 4),
-              Expanded(
-                  child: _Key(label: 'Espaço', onTap: () => kb._type(' '))),
-              const SizedBox(width: 4),
-              _Key(label: '↵', width: 52, onTap: () => kb._type('\n')),
-              const SizedBox(width: 4),
+              _Key(
+                  label: '.,',
+                  onTap: () => kb._type('.'),
+                  w: 44 * s,
+                  h: keyH,
+                  sp: sp,
+                  fs: fsS,
+                  fsS: fsS),
+              SizedBox(width: sp),
+              _Key(
+                  label: 'Espaço',
+                  onTap: () => kb._type(' '),
+                  w: spaceW,
+                  h: keyH,
+                  sp: 0,
+                  fs: fsS,
+                  fsS: fsS),
+              SizedBox(width: sp),
+              _Key(
+                  label: '↵',
+                  onTap: () => kb._type('\n'),
+                  w: 52 * s,
+                  h: keyH,
+                  sp: sp,
+                  fs: fs,
+                  fsS: fsS),
+              SizedBox(width: sp),
               GestureDetector(
                 onTap: kb.hide,
                 child: Container(
-                  width: 44,
-                  height: 42,
+                  width: 44 * s,
+                  height: keyH,
                   decoration: BoxDecoration(
                     color: const Color(0xffcbd5e1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.keyboard_hide_outlined,
-                      size: 20, color: Color(0xff475569)),
+                  child: Icon(Icons.keyboard_hide_outlined,
+                      size: 20 * s, color: const Color(0xff475569)),
                 ),
               ),
             ],
@@ -302,13 +437,25 @@ class _KeyboardWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildRow(List<String> keys, {required bool upper}) {
+  Widget _row(List<String> keys,
+      {required bool upper,
+      required double keyW,
+      required double keyH,
+      required double sp,
+      required double fs,
+      required double fsS}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
       children: keys
           .map<Widget>((k) => _Key(
                 label: upper ? k.toUpperCase() : k,
                 onTap: () => kb._type(upper ? k.toUpperCase() : k),
+                w: keyW,
+                h: keyH,
+                sp: sp,
+                fs: fs,
+                fsS: fsS,
               ))
           .toList(),
     );
@@ -316,20 +463,32 @@ class _KeyboardWidget extends StatelessWidget {
 }
 
 class _Key extends StatelessWidget {
-  const _Key({required this.label, required this.onTap, this.width});
+  const _Key({
+    required this.label,
+    required this.onTap,
+    required this.h,
+    required this.sp,
+    required this.fs,
+    required this.fsS,
+    this.w,
+  });
   final String label;
   final VoidCallback onTap;
-  final double? width;
+  final double? w;
+  final double h;
+  final double sp;
+  final double fs;
+  final double fsS;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 2),
+      padding: EdgeInsets.symmetric(horizontal: sp / 2),
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          width: width ?? 36,
-          height: 42,
+          width: w,
+          height: h,
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(8),
@@ -343,7 +502,7 @@ class _Key extends StatelessWidget {
             child: Text(
               label,
               style: TextStyle(
-                fontSize: label.length > 1 ? 11 : 15,
+                fontSize: label.length > 1 ? fsS : fs,
                 fontWeight: FontWeight.w600,
                 color: const Color(0xff1e293b),
               ),
@@ -356,8 +515,10 @@ class _Key extends StatelessWidget {
 }
 
 class _ShiftKey extends StatelessWidget {
-  const _ShiftKey({required this.kb});
+  const _ShiftKey({required this.kb, required this.w, required this.h});
   final VirtualKeyboardController kb;
+  final double w;
+  final double h;
 
   @override
   Widget build(BuildContext context) {
@@ -368,8 +529,8 @@ class _ShiftKey extends StatelessWidget {
         onTap: kb._toggleShift,
         onDoubleTap: kb._toggleCaps,
         child: Container(
-          width: 46,
-          height: 42,
+          width: w,
+          height: h,
           decoration: BoxDecoration(
             color: active ? const Color(0xff1877f2) : const Color(0xffe2e8f0),
             borderRadius: BorderRadius.circular(8),
@@ -393,8 +554,10 @@ class _ShiftKey extends StatelessWidget {
 }
 
 class _BackspaceKey extends StatelessWidget {
-  const _BackspaceKey({required this.kb});
+  const _BackspaceKey({required this.kb, required this.w, required this.h});
   final VirtualKeyboardController kb;
+  final double w;
+  final double h;
 
   @override
   Widget build(BuildContext context) {
@@ -403,8 +566,8 @@ class _BackspaceKey extends StatelessWidget {
       child: GestureDetector(
         onTap: kb._backspace,
         child: Container(
-          width: 46,
-          height: 42,
+          width: w,
+          height: h,
           decoration: BoxDecoration(
             color: const Color(0xffe2e8f0),
             borderRadius: BorderRadius.circular(8),
