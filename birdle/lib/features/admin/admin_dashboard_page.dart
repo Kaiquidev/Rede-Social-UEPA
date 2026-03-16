@@ -153,6 +153,10 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
         ),
         bottom: TabBar(
           controller: _tabController,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          indicatorColor: Colors.white,
+          indicatorWeight: 3,
           tabs: const [
             Tab(text: 'Usuários'),
             Tab(text: 'Posts'),
@@ -160,13 +164,30 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildUsuariosTab(),
-          _buildPostsTab(),
-          _buildCursosTab(),
-        ],
+      body: GestureDetector(
+        onHorizontalDragEnd: (details) {
+          // Arrastar para esquerda = próxima aba
+          if (details.primaryVelocity != null) {
+            if (details.primaryVelocity! < -300) {
+              final next = (_tabController.index + 1)
+                  .clamp(0, _tabController.length - 1);
+              _tabController.animateTo(next);
+            } else if (details.primaryVelocity! > 300) {
+              final prev = (_tabController.index - 1)
+                  .clamp(0, _tabController.length - 1);
+              _tabController.animateTo(prev);
+            }
+          }
+        },
+        child: TabBarView(
+          controller: _tabController,
+          physics: const NeverScrollableScrollPhysics(),
+          children: [
+            _buildUsuariosTab(),
+            _buildPostsTab(),
+            _buildCursosTab(),
+          ],
+        ),
       ),
     );
   }
